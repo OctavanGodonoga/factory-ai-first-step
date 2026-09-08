@@ -1,0 +1,21 @@
+# .NET
+bin/
+obj/
+*.user
+
+# Node / Angular
+node_modules/
+dist/
+.angular/
+
+# IDE
+.vs/
+.vscode/*
+!.vscode/extensions.json
+
+# Claude Code local (personal) settings
+.claude/settings.local.json
+
+# OS
+.DS_Store
+Thumbs.db
