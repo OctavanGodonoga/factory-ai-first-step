@@ -1,0 +1,16 @@
+services:
+  api:
+    build:
+      context: ./src/TalentMap.Api
+    ports:
+      - "13466:8080"
+    restart: unless-stopped
+
+  client:
+    build:
+      context: ./src/talent-map-client
+    ports:
+      - "13467:80"
+    restart: unless-stopped
+    depends_on:
+      - api
