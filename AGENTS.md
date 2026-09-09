@@ -67,7 +67,10 @@ tallent_map_md/
 
 | Document | Cale | Descriere |
 |----------|------|-----------|
-| README | — | Nu există încă. Rulează `/aif-docs` pentru a genera un README și documentație detaliată. |
+| README | `README.md` | Pagina de start a proiectului |
+| Getting Started | `docs/getting-started.md` | Instalare, rulare locală și via Docker |
+| Architecture | `docs/architecture.md` | Structura proiectului, pattern Layered |
+| Deployment | `docs/deployment.md` | Rularea cu Docker Compose |
 
 ## Fișiere de context AI
 
