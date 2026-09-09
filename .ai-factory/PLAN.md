@@ -43,9 +43,9 @@ the containerized api reaches Mongo via `host.docker.internal:27017`, while loca
 <!-- Commit checkpoint: tasks 1-4 -->
 
 ### Phase 3: Docker Networking
-- [ ] Task 5: Update `compose.yml`'s `api` service with `extra_hosts: host.docker.internal:host-gateway` and an `ConnectionStrings__MongoDb=mongodb://host.docker.internal:27017` environment override so the containerized api reaches the host's Docker Desktop MongoDB. (depends on 2)
+- [x] Task 5: Update `compose.yml`'s `api` service with `extra_hosts: host.docker.internal:host-gateway` and an `ConnectionStrings__MongoDb=mongodb://host.docker.internal:27017` environment override so the containerized api reaches the host's Docker Desktop MongoDB. (depends on 2)
 <!-- Commit checkpoint: task 5 -->
 
 ## Commit Plan
-- [ ] **Commit 1** (after tasks 1-4): "feat: add MongoDB driver, configuration, and connection registration with startup ping check"
+- [x] **Commit 1** (after tasks 1-4): "feat: add MongoDB driver, configuration, and connection registration with startup ping check"
 - [ ] **Commit 2** (after task 5): "chore: route containerized api to host MongoDB via Docker Desktop networking"
