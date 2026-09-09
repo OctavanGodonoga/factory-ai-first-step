@@ -31,6 +31,7 @@ tallent_map_md/
 ├── .ai-factory.json        # Manifestul intern al framework-ului AI Factory (skill-uri/agenți gestionate)
 ├── skills-lock.json        # Lock file pentru skill-urile instalate din skills.sh
 ├── TalentMap.slnx          # Soluția .NET (format .slnx, implicit în SDK .NET 10)
+├── compose.yml             # Docker Compose: rulează api (13466) și client (13467) în Docker Desktop
 └── src/
     ├── TalentMap.Api/       # Backend ASP.NET Core Web API (.NET 10, Controllers-based)
     │   ├── Controllers/     # Handlere HTTP (gol deocamdată)
@@ -38,9 +39,13 @@ tallent_map_md/
     │   ├── Repositories/    # Acces la fișierele din viitorul Database/ (gol deocamdată)
     │   ├── Models/           # Modele de domeniu / DTO-uri (gol deocamdată)
     │   ├── Middleware/       # Cross-cutting: auth, erori, logging (gol deocamdată)
-    │   └── Program.cs        # Bootstrap-ul aplicației
+    │   ├── Program.cs        # Bootstrap-ul aplicației
+    │   ├── Dockerfile        # Build multi-stage: SDK .NET 10 → runtime ASP.NET, expus pe 8080
+    │   └── .dockerignore
     └── talent-map-client/    # Frontend Angular (SPA, ultima versiune stabilă)
         ├── angular.json      # Configurare Angular CLI
+        ├── Dockerfile        # Build multi-stage: Node → nginx (servire statică), expus pe 80
+        ├── .dockerignore
         └── src/
             ├── main.ts       # Bootstrap-ul aplicației Angular
             └── app/          # Componenta rădăcină + rutare (feature module-urile vor fi adăugate ulterior)
@@ -56,6 +61,7 @@ tallent_map_md/
 | `TalentMap.slnx` | Soluția .NET care leagă proiectul backend |
 | `src/TalentMap.Api/Program.cs` | Punctul de bootstrap al backend-ului ASP.NET Core Web API |
 | `src/talent-map-client/src/main.ts` | Punctul de bootstrap al aplicației Angular |
+| `compose.yml` | Rulează backend-ul și frontend-ul în Docker Desktop: `docker compose up -d` (api: `localhost:13466`, client: `localhost:13467`) |
 
 ## Documentație
 

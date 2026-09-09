@@ -189,3 +189,16 @@ public class JsonEmployeeRepository : IEmployeeRepository
 - ❌ **Model anemic dus la extrem:** entități care sunt doar "saci de date" fără nicio
   validare proprie — regulile simple de validare (ex. câmpuri obligatorii) pot rămâne în
   Model, restul logicii de orchestrare stă în Service.
+
+## Containerizare
+
+Ambele proiecte rulează local prin Docker Desktop via `compose.yml` la rădăcina
+proiectului:
+- **`api`** (`src/TalentMap.Api/Dockerfile`, build multi-stage SDK .NET 10 → runtime
+  ASP.NET) — expus pe `localhost:13466` (intern 8080).
+- **`client`** (`src/talent-map-client/Dockerfile`, build multi-stage Node → nginx,
+  servire statică) — expus pe `localhost:13467` (intern 80).
+
+Pornire: `docker compose up -d` din rădăcina proiectului. Oprire: `docker compose down`.
+Fără alte servicii (bază de date, cache) — persistența pe fișiere JSON din `Database/`
+nu e încă implementată în cod, deci nu există volum montat pentru ea momentan.

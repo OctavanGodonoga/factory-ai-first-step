@@ -23,7 +23,7 @@ configurează un docker-compose pentru a rula ambele proiecte în docker desktop
 <!-- Commit checkpoint: tasks 1-2 -->
 
 ### Faza 2: Orchestrare și verificare
-- [ ] Task 3: compose.yml la rădăcina proiectului (depinde de 1, 2) — vezi TaskList #12
-- [ ] Task 4: Build și verificare rulare în Docker Desktop (depinde de 3) — vezi TaskList #13
-- [ ] Task 5: Actualizează AGENTS.md și ARCHITECTURE.md cu setup-ul Docker (depinde de 4) — vezi TaskList #14
+- [x] Task 3: compose.yml la rădăcina proiectului (depinde de 1, 2) — vezi TaskList #12
+- [x] Task 4: Build și verificare rulare în Docker Desktop (depinde de 3) — vezi TaskList #13
+- [x] Task 5: Actualizează AGENTS.md și ARCHITECTURE.md cu setup-ul Docker (depinde de 4) — vezi TaskList #14
 <!-- Commit checkpoint: tasks 3-5 -->
