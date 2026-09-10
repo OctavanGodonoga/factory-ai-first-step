@@ -44,6 +44,7 @@ builder.Services.AddRateLimiter(options =>
 builder.Services.AddMongoDb(builder.Configuration);
 builder.Services.AddSingleton<IMoldovaBorderValidator, MoldovaBorderValidator>();
 builder.Services.AddSingleton<IMapPointRepository, MongoMapPointRepository>();
+builder.Services.AddSingleton<IVectorTileEncoder, VectorTileEncoder>();
 builder.Services.AddScoped<IMapPointService, MapPointService>();
 
 var app = builder.Build();

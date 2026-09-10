@@ -13,15 +13,18 @@ public class MapPointService : IMapPointService
     private readonly ILogger<MapPointService> _logger;
     private readonly IMapPointRepository _repository;
     private readonly IMoldovaBorderValidator _borderValidator;
+    private readonly IVectorTileEncoder _vectorTileEncoder;
 
     public MapPointService(
         ILogger<MapPointService> logger,
         IMapPointRepository repository,
-        IMoldovaBorderValidator borderValidator)
+        IMoldovaBorderValidator borderValidator,
+        IVectorTileEncoder vectorTileEncoder)
     {
         _logger = logger;
         _repository = repository;
         _borderValidator = borderValidator;
+        _vectorTileEncoder = vectorTileEncoder;
     }
 
     public async Task<MapPoint> CreateAsync(MapPointRequest request)
@@ -95,21 +98,7 @@ public class MapPointService : IMapPointService
     {
         _logger.LogInformation("GetByTileAsync called. Z: {Z}, X: {X}, Y: {Y}", z, x, y);
 
-        GeoJsonPolygon<GeoJson2DGeographicCoordinates> polygon;
-        try
-        {
-            polygon = TileGeometry.ToPolygon(z, x, y);
-        }
-        catch (ArgumentOutOfRangeException ex)
-        {
-            _logger.LogWarning(
-                "GetByTileAsync received invalid tile coordinates. Z: {Z}, X: {X}, Y: {Y}, Message: {Message}",
-                z,
-                x,
-                y,
-                ex.Message);
-            throw new MapPointValidationException(new List<string> { ex.Message });
-        }
+        var polygon = ResolveTilePolygon(nameof(GetByTileAsync), z, x, y);
 
         var points = await _repository.FindWithinAsync(polygon);
         var result = points.Select(ToDto).ToList();
@@ -122,6 +111,45 @@ public class MapPointService : IMapPointService
             result.Count);
 
         return result;
+    }
+
+    public async Task<byte[]> GetTileMvtAsync(int z, int x, int y)
+    {
+        _logger.LogInformation("GetTileMvtAsync called. Z: {Z}, X: {X}, Y: {Y}", z, x, y);
+
+        var polygon = ResolveTilePolygon(nameof(GetTileMvtAsync), z, x, y);
+
+        var points = await _repository.FindWithinAsync(polygon);
+        var bytes = _vectorTileEncoder.Encode(points, z, x, y);
+
+        _logger.LogInformation(
+            "GetTileMvtAsync succeeded. Z: {Z}, X: {X}, Y: {Y}, PointCount: {PointCount}, ByteSize: {ByteSize}",
+            z,
+            x,
+            y,
+            points.Count,
+            bytes.Length);
+
+        return bytes;
+    }
+
+    private GeoJsonPolygon<GeoJson2DGeographicCoordinates> ResolveTilePolygon(string callerName, int z, int x, int y)
+    {
+        try
+        {
+            return TileGeometry.ToPolygon(z, x, y);
+        }
+        catch (ArgumentOutOfRangeException ex)
+        {
+            _logger.LogWarning(
+                "{CallerName} received invalid tile coordinates. Z: {Z}, X: {X}, Y: {Y}, Message: {Message}",
+                callerName,
+                z,
+                x,
+                y,
+                ex.Message);
+            throw new MapPointValidationException(new List<string> { ex.Message });
+        }
     }
 
     private static MapPointDto ToDto(MapPoint point)

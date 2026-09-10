@@ -47,7 +47,7 @@ Created: 2026-09-10
 
 ## Commit Plan
 - [x] **Commit 1** (după task-urile 1-3): "feat(api): add MVT encoding dependency and point type/status fields"
-- [ ] **Commit 2** (după task-urile 4-6): "feat(api): add MVT tile endpoint for map points"
+- [x] **Commit 2** (după task-urile 4-6): "feat(api): add MVT tile endpoint for map points"
 
 ## Tasks
 
@@ -129,7 +129,7 @@ Created: 2026-09-10
 
 ### Phase 2: Integrare serviciu + endpoint
 
-- [ ] **Task 4: Adaugă metoda de generare tile MVT în `IMapPointService`/`MapPointService`**
+- [x] **Task 4: Adaugă metoda de generare tile MVT în `IMapPointService`/`MapPointService`**
   Fișiere: `src/TalentMap.Api/Services/IMapPointService.cs`,
   `src/TalentMap.Api/Services/MapPointService.cs`
   (depinde de Task 3)
@@ -137,23 +137,27 @@ Created: 2026-09-10
   Adaugă în interfață: `Task<byte[]> GetTileMvtAsync(int z, int x, int y);`
 
   Implementare în `MapPointService`:
-  - [ ] Injectează `IVectorTileEncoder` prin constructor (adaugă câmp `_vectorTileEncoder`).
-  - [ ] Reutilizează exact fluxul din `GetByTileAsync`: `TileGeometry.ToPolygon(z, x, y)` (prinde
+  - [x] Injectează `IVectorTileEncoder` prin constructor (adaugă câmp `_vectorTileEncoder`).
+  - [x] Reutilizează exact fluxul din `GetByTileAsync`: `TileGeometry.ToPolygon(z, x, y)` (prinde
     `ArgumentOutOfRangeException` și aruncă `MapPointValidationException`, identic cu
     `GetByTileAsync`), apoi `_repository.FindWithinAsync(polygon)` pentru lista de `MapPoint`.
-  - [ ] Apelează `_vectorTileEncoder.Encode(points, z, x, y)` și returnează bytes-ii.
-  - [ ] Nu duplica validarea — extrage, dacă e util, un helper privat comun pentru
+  - [x] Apelează `_vectorTileEncoder.Encode(points, z, x, y)` și returnează bytes-ii.
+  - [x] Nu duplica validarea — extrage, dacă e util, un helper privat comun pentru
     `TileGeometry.ToPolygon` cu try/catch, folosit de ambele metode (`GetByTileAsync` și
     `GetTileMvtAsync`), pentru a evita codul duplicat.
 
+  > Notă implementare: extras helper-ul privat `ResolveTilePolygon(callerName, z, x, y)`, folosit
+  > acum de `GetByTileAsync` și `GetTileMvtAsync` — elimină duplicarea try/catch, mesajul de WARN
+  > include numele metodei apelante.
+
   LOGGING REQUIREMENTS:
-  - [ ] INFO la intrare: `"GetTileMvtAsync called. Z: {Z}, X: {X}, Y: {Y}"`.
-  - [ ] WARN dacă `TileGeometry.ToPolygon` aruncă (coordonate tile invalide), identic ca stil cu
+  - [x] INFO la intrare: `"GetTileMvtAsync called. Z: {Z}, X: {X}, Y: {Y}"`.
+  - [x] WARN dacă `TileGeometry.ToPolygon` aruncă (coordonate tile invalide), identic ca stil cu
     `GetByTileAsync`.
-  - [ ] INFO la succes: `"GetTileMvtAsync succeeded. Z: {Z}, X: {X}, Y: {Y}, PointCount: {PointCount},
+  - [x] INFO la succes: `"GetTileMvtAsync succeeded. Z: {Z}, X: {X}, Y: {Y}, PointCount: {PointCount},
     ByteSize: {ByteSize}"`.
 
-- [ ] **Task 5: Înregistrează `IVectorTileEncoder` în DI**
+- [x] **Task 5: Înregistrează `IVectorTileEncoder` în DI**
   Fișier: `src/TalentMap.Api/Program.cs`
   (depinde de Task 3)
   Adaugă `builder.Services.AddSingleton<IVectorTileEncoder, VectorTileEncoder>();` lângă
@@ -162,7 +166,7 @@ Created: 2026-09-10
   Nicio cerință de logging suplimentară (folosește deja `app.LogMongoRegistration()`-style logging
   existent pentru pornire, dacă e cazul; altfel nu e necesar logging separat pentru o linie de DI).
 
-- [ ] **Task 6: Adaugă controller-ul `MapTilesController` cu endpoint-ul `.pbf`**
+- [x] **Task 6: Adaugă controller-ul `MapTilesController` cu endpoint-ul `.pbf`**
   Fișier nou: `src/TalentMap.Api/Controllers/MapTilesController.cs`
   (depinde de Task 4, Task 5)
 
@@ -194,15 +198,15 @@ Created: 2026-09-10
       }
   }
   ```
-  - [ ] Content-Type răspuns: `application/vnd.mapbox-vector-tile`.
-  - [ ] `[AllowAnonymous]` + `[EnableRateLimiting("mappoints-read")]` la nivel de acțiune, la fel ca
+  - [x] Content-Type răspuns: `application/vnd.mapbox-vector-tile`.
+  - [x] `[AllowAnonymous]` + `[EnableRateLimiting("mappoints-read")]` la nivel de acțiune, la fel ca
     `GetByTile` din `MapPointsController` (controller-ul nou nu are `[Authorize]` la nivel de
     clasă, deci nu e nevoie de override — dar adaugă explicit `[AllowAnonymous]` pentru claritate
     și consecvență vizuală cu restul codului).
-  - [ ] Controller-ul rămâne subțire: validare implicită prin route constraints (`:int`), apel unic
+  - [x] Controller-ul rămâne subțire: validare implicită prin route constraints (`:int`), apel unic
     către `IMapPointService.GetTileMvtAsync`, formatare răspuns.
 
   LOGGING REQUIREMENTS:
-  - [ ] INFO la intrare: `"GetTile action called. Route: GET api/map/points/{Z}/{X}/{Y}.pbf"`.
-  - [ ] WARN la `MapPointValidationException` (coordonate tile invalide), cu mesajele de eroare din
+  - [x] INFO la intrare: `"GetTile action called. Route: GET api/map/points/{Z}/{X}/{Y}.pbf"`.
+  - [x] WARN la `MapPointValidationException` (coordonate tile invalide), cu mesajele de eroare din
     excepție — identic stil cu celelalte acțiuni din `MapPointsController`.
