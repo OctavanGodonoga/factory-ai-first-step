@@ -14,6 +14,7 @@ var app = builder.Build();
 
 app.LogMongoRegistration();
 await app.CheckMongoConnectivityAsync();
+await app.EnsureMapPointIndexesAsync();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

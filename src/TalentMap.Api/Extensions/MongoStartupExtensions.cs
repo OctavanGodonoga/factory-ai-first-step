@@ -1,11 +1,14 @@
 using System.Diagnostics;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using TalentMap.Api.Models;
 
 namespace TalentMap.Api.Extensions;
 
 public static class MongoStartupExtensions
 {
+    private const string MapPointsCollectionName = "mapPoints";
+
     public static void LogMongoRegistration(this WebApplication app)
     {
         var logger = app.Services.GetRequiredService<ILogger<Program>>();
@@ -47,6 +50,38 @@ public static class MongoStartupExtensions
                 stopwatch.ElapsedMilliseconds,
                 mongoHost,
                 database.DatabaseNamespace.DatabaseName,
+                ex.GetType().Name);
+        }
+    }
+
+    public static async Task EnsureMapPointIndexesAsync(this WebApplication app)
+    {
+        var logger = app.Services.GetRequiredService<ILogger<Program>>();
+        var database = app.Services.GetRequiredService<IMongoDatabase>();
+
+        var stopwatch = Stopwatch.StartNew();
+
+        try
+        {
+            var collection = database.GetCollection<MapPoint>(MapPointsCollectionName);
+            var indexKeys = Builders<MapPoint>.IndexKeys.Geo2DSphere(p => p.Location);
+            var indexName = await collection.Indexes.CreateOneAsync(new CreateIndexModel<MapPoint>(indexKeys));
+
+            stopwatch.Stop();
+            logger.LogInformation(
+                "2dsphere index ensured on {CollectionName}.location in {ElapsedMs} ms. Index name: {IndexName}",
+                MapPointsCollectionName,
+                stopwatch.ElapsedMilliseconds,
+                indexName);
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            logger.LogWarning(
+                ex,
+                "Failed to ensure 2dsphere index on {CollectionName}.location after {ElapsedMs} ms. ExceptionType: {ExceptionType}",
+                MapPointsCollectionName,
+                stopwatch.ElapsedMilliseconds,
                 ex.GetType().Name);
         }
     }
