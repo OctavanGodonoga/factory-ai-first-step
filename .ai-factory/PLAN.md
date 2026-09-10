@@ -1,212 +1,134 @@
-<!-- handoff:task:1b645d88-ef31-4b77-9bbb-e471011d95d8 -->
-# Implementation Plan: Generează și expune Vector Tiles MVT
+<!-- handoff:task:12e5f93a-5216-46e7-a990-d1bc513af637 -->
+# Implementation Plan: Consumă MVT în MapLibre și stilizează punctele
 
 Branch: main
 Created: 2026-09-10
 
 ## Settings
-- [ ] Testing: no
-- [ ] Logging: verbose
-- [ ] Docs: no
+- [x] Testing: no
+- [x] Logging: verbose
+- [x] Docs: no
 
 ## Context / Findings
-- [ ] `.ai-factory/DESCRIPTION.md` și `.ai-factory/ARCHITECTURE.md` sunt neactualizate — descriu
-  persistență pe fișiere JSON, dar codul real folosește deja MongoDB (`MongoDB.Driver` 3.11.1,
-  colecția `mapPoints`, index `2dsphere` pe `location`). Acest plan tratează codul ca sursă de
-  adevăr, nu documentele stale.
-- [ ] Există deja un endpoint JSON de tile: `GET api/mappoints/tile/{z}/{x}/{y}`
-  (`Controllers/MapPointsController.cs`), care folosește `TileGeometry.ToPolygon(z,x,y)`
-  (`Services/TileGeometry.cs`) pentru a construi un poligon de bounding-box și
-  `IMapPointRepository.FindWithinAsync` (`Repositories/MongoMapPointRepository.cs`) pentru
-  interogarea MongoDB cu `$geoWithin`, plafonat la 5000 rezultate / 10s timeout. Endpoint-ul nou
-  `.pbf` trebuie să refolosească exact acest pipeline de interogare, nu să-l duplice.
-- [ ] **Gap important:** modelul `MapPoint` (`Models/MapPoint.cs`) NU are în prezent câmpuri
-  `type`/`status` — doar `name`, `description`, `location`, `createdAt`. Cerința de business
-  ("include doar proprietăți minime precum id, type, status") cere ca aceste câmpuri să existe
-  pe model. Acest plan adaugă `Type`/`Status` pe modelul de domeniu `MapPoint` cu valori implicite
-  constante (fără a extinde fluxul de creare/actualizare — `MapPointRequest`/validare rămân
-  neschimbate, este în afara scopului acestui task). Documentele Mongo existente, care nu au
-  aceste câmpuri, se vor deserializa cu valorile implicite ale proprietăților C# (driverul Mongo
-  nu cere elementele BSON lipsă dacă proprietatea nu e `[BsonRequired]`).
-- [ ] Nu există nicio librărie de encodare MVT în proiect (`TalentMap.Api.csproj` are doar
-  `Microsoft.AspNetCore.OpenApi` și `MongoDB.Driver`). Se adaugă `NetTopologySuite`,
-  `NetTopologySuite.IO.VectorTiles` și `NetTopologySuite.IO.VectorTiles.Mapbox` (v1.1.0,
-  verificate ca publicate pe NuGet.org). Aceste pachete gestionează intern proiecția
-  WGS84 → coordonate locale de tile (extent) la scriere — geometriile se adaugă în lon/lat, nu
-  este nevoie de o transformare de pixeli scrisă manual.
-- [ ] Endpoint-urile de citire existente sunt publice (`[AllowAnonymous]`) dar rate-limited prin
-  policy-ul `mappoints-read` (120 req/min/IP, `Program.cs`). Endpoint-ul nou `.pbf` refolosește
-  aceeași policy — dacă traficul real de tile-uri (multe cereri per pan/zoom) se dovedește
-  insuficient acoperit, o policy dedicată se poate adăuga ulterior într-un task separat.
-- [ ] Ruta cerută explicit de task este `GET /api/map/points/{z}/{x}/{y}.pbf` — diferită ca segment
-  de ruta JSON existentă (`api/mappoints/tile/...`). Se creează un controller nou, dedicat,
-  `MapTilesController` cu `[Route("api/map")]` + `[HttpGet("points/{z:int}/{x:int}/{y:int}.pbf")]`,
-  pentru a respecta convenția de attribute-routing a proiectului (fără override-uri de rută
-  absolută) și pentru a separa clar servirea de tile-uri binare de CRUD-ul JSON din
-  `MapPointsController`.
-
-## Commit Plan
-- [x] **Commit 1** (după task-urile 1-3): "feat(api): add MVT encoding dependency and point type/status fields"
-- [x] **Commit 2** (după task-urile 4-6): "feat(api): add MVT tile endpoint for map points"
+- [x] Frontend nu e greenfield: `src/talent-map-client/src/app/map/map.ts` (+`map.html`/`map.css`)
+  e deja un component standalone MapLibre GL (`app-map`, rutat lazy din `app.routes.ts`) care
+  randează harta centrată pe Moldova, maschează exteriorul țării (din
+  `public/data/moldova-border.geojson`) și plasează un marker temporar la click. Nu consumă
+  încă niciun endpoint din API — nu există sursă de date, nici layer de puncte.
+- [x] Endpoint-ul de tile-uri MVT există deja (implementat într-un plan anterior):
+  `GET http://localhost:13466/api/map/points/{z}/{x}/{y}.pbf`
+  (`MapTilesController`, `[AllowAnonymous]`, rate-limited, Content-Type
+  `application/vnd.mapbox-vector-tile`). Layer-ul MVT se numește `mappoints` și conține
+  **exact trei proprietăți per feature**: `id`, `type` (implicit `"generic"`), `status`
+  (implicit `"active"`) — fără `name`/`description` (excluse explicit din encoder pentru
+  minimalism). Nu există încă niciun flux de creare care să populeze `type`/`status` cu alte
+  valori decât cele implicite, deci stilizarea trebuie să funcționeze corect și cu un singur
+  tip/status prezent în date, cu fallback vizual clar pentru valori necunoscute viitoare.
+- [x] Endpoint-ul JSON existent (`GET /api/mappoints/tile/{z}/{x}/{y}`, `MapPointDto`) **nu**
+  expune `type`/`status` — doar `Id`/`Name`/`Description`/`Longitude`/`Latitude`. Nu e utilizabil
+  pentru cerința de stilizare pe proprietăți; acest plan folosește exclusiv sursa vector (MVT),
+  nu adaugă un flux paralel JSON.
+- [x] **Gap blocant identificat:** API-ul (`src/TalentMap.Api/Program.cs`) nu are CORS configurat,
+  iar clientul Angular (`ng serve` pe `http://localhost:4200`, sau containerul nginx pe
+  `http://localhost:13467` din `compose.yml`) rulează pe o origine diferită de API
+  (`http://localhost:13466`). Fără CORS, orice cerere de tile din browser către `.pbf` va fi
+  blocată de same-origin policy — sursa vector nu se va încărca deloc. Acest plan adaugă o
+  politică CORS minimă (doar GET, origini explicite din configurare) ca precondiție, altfel
+  restul task-ului e imposibil de verificat funcțional.
+- [x] Proiectul Angular nu are încă un sistem de `environment.ts`/`fileReplacements` (verificat în
+  `angular.json`) — constantele de configurare existente (ex. stilul OpenFreeMap din `map.ts`)
+  sunt deja hardcodate ca `private readonly` fields direct în component. Acest plan urmează
+  aceeași convenție pentru URL-ul de bază al API-ului (nu introduce o abstracție nouă de
+  environment, în afara scopului acestui task).
+- [x] Ordinea layerelor contează: `moldova-mask-fill` și `moldova-border-line` sunt adăugate
+  async, după ce se încarcă `moldova-border.geojson`. Layerele noi de puncte trebuie adăugate
+  **după** finalizarea acelui flux, ca să se randeze deasupra măștii/graniței (MapLibre
+  randează layerele în ordinea adăugării, cel mai recent adăugat deasupra).
 
 ## Tasks
 
-### Phase 1: Fundație (model + dependințe)
+### Phase 1: Precondiție — CORS pe API
 
-- [x] **Task 1: Adaugă pachetele NuGet pentru encodare MVT**
-  Fișier: `src/TalentMap.Api/TalentMap.Api.csproj`
-  Adaugă `<PackageReference>` pentru:
-  - [x] `NetTopologySuite` (ultima versiune stabilă compatibilă cu .NET 10, ex. 2.6.x)
-  - [x] `NetTopologySuite.Features` (>= 2.1.0 — cerută explicit deoarece Task 3 folosește direct
-    tipurile `NetTopologySuite.Features.Feature`/`AttributesTable`; altfel ar fi rezolvată doar
-    tranzitiv prin `NetTopologySuite.IO.VectorTiles`)
-  - [x] `NetTopologySuite.IO.VectorTiles` (1.1.0)
-  - [x] `NetTopologySuite.IO.VectorTiles.Mapbox` (1.1.0)
-  Rulează `dotnet restore` pentru a confirma că pachetele se rezolvă corect împreună cu
-  `MongoDB.Driver` existent (fără conflicte de versiuni de dependențe tranzitive).
-  Nicio cerință de logging — este o modificare de configurare de build.
+- [x] **Task 1: Activează CORS pe API pentru originile clientului Angular**
+  Fișiere: `src/TalentMap.Api/Program.cs`, `src/TalentMap.Api/appsettings.json`,
+  `src/TalentMap.Api/appsettings.Development.json`
 
-  > Notă implementare: `NetTopologySuite.Features` cea mai recentă versiune publicată e 2.2.0
-  > (nu 2.6.x ca `NetTopologySuite`); am folosit 2.2.0, care satisface minimul >= 2.1.0 cerut de
-  > `NetTopologySuite.IO.VectorTiles` 1.1.0. `dotnet restore` confirmat OK, fără conflicte.
-
-- [x] **Task 2: Adaugă câmpurile `Type` și `Status` pe modelul `MapPoint`**
-  Fișier: `src/TalentMap.Api/Models/MapPoint.cs`
-  Adaugă două proprietăți noi pe clasa `MapPoint`, mapate BSON:
-  - [x] `[BsonElement("type")] public string Type { get; set; } = "generic";`
-  - [x] `[BsonElement("status")] public string Status { get; set; } = "active";`
-  Nu modifica `MapPointRequest`, `MapPointDto` sau validarea din `MapPointService` — popularea
-  acestor câmpuri din fluxul de creare/actualizare este în afara scopului acestui task (rămân la
-  valoarea implicită până la un task viitor dedicat).
-  Nicio cerință de logging — este o schimbare de model de date fără logică.
-
-- [x] **Task 3: Creează serviciul de encodare MVT `IVectorTileEncoder`**
-  Fișiere noi: `src/TalentMap.Api/Services/IVectorTileEncoder.cs`,
-  `src/TalentMap.Api/Services/VectorTileEncoder.cs`
-  (depinde de Task 1, Task 2)
-
-  Interfață:
-  ```csharp
-  public interface IVectorTileEncoder
-  {
-      byte[] Encode(IReadOnlyList<MapPoint> points, int z, int x, int y);
-  }
-  ```
-
-  Implementare `VectorTileEncoder`:
-  - [x] Construiește un `NetTopologySuite.IO.VectorTiles.Tiles.Tile(x, y, z)` și un
-    `NetTopologySuite.IO.VectorTiles.VectorTile { TileId = tile.Id }`.
-  - [x] Un singur `Layer` (nume: `"mappoints"`).
-  - [x] Pentru fiecare `MapPoint`, creează un `NetTopologySuite.Geometries.Point` din
-    `point.Location.Coordinates.Longitude/Latitude` (via `GeometryFactory`) și un
-    `NetTopologySuite.Features.Feature` cu `AttributesTable` conținând **doar**:
-    `id` (string), `type` (`point.Type`), `status` (`point.Status`) — nicio altă proprietate
-    (nu `name`, nu `description`, nu `createdAt` — cerință explicită de minimalism din task).
-  - [x] Scrie tile-ul cu `vectorTile.Write(stream, MapboxTileWriter.DefaultMinLinealExtent,
-    MapboxTileWriter.DefaultMinPolygonalExtent)` într-un `MemoryStream` și returnează
-    `stream.ToArray()`.
-  - [x] Verifică la implementare denumirea exactă a proprietăților (`Tile.Id` vs `Tile.id`) în
-    versiunea de pachet instalată — API-ul de mai sus e confirmat din documentația publică a
-    proiectului, dar poate varia ușor între minor-versiuni.
-
-  > Notă implementare: `Tile` există atât în `NetTopologySuite.IO.VectorTiles.Tiles` cât și în
-  > `NetTopologySuite.IO.VectorTiles.Mapbox` (tip protobuf intern) — ambiguitate de nume rezolvată
-  > cu un alias `using TileCoordinate = NetTopologySuite.IO.VectorTiles.Tiles.Tile;`. Verificat prin
-  > reflecție + sursă publică GitHub (commit-ul din nuspec) că `Tile(int x, int y, int zoom)` are
-  > exact această ordine de parametri și că `vectorTile.Write(...)` e o metodă de extensie din
-  > `MapboxTileWriter` care citește coordonatele geometriei direct ca lon/lat (nicio transformare
-  > manuală necesară). Validat end-to-end cu un harness temporar: encode → decode cu
-  > `MapboxTileReader` confirmă layer `mappoints` cu exact proprietățile `id`/`type`/`status`.
+  - [x] În `appsettings.json`, adaugă o secțiune nouă `"Cors": { "AllowedOrigins": [
+    "http://localhost:13467" ] }` (originea clientului din `compose.yml`).
+  - [x] În `appsettings.Development.json`, adaugă `"Cors": { "AllowedOrigins": [
+    "http://localhost:4200" ] }` (originea implicită `ng serve`), pentru a nu amesteca
+    originea de dev cu cea de producție/docker.
+  - [x] În `Program.cs`, înregistrează o politică CORS numită `"map-client"` cu
+    `builder.Services.AddCors(options => options.AddPolicy("map-client", policy => policy
+    .WithOrigins(builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ??
+    [])
+    .WithMethods("GET")
+    .AllowAnyHeader()));` — doar GET, deoarece endpoint-urile publice consumate din browser
+    (tile MVT + JSON) sunt exclusiv de citire; scrierile (`POST`/`PUT`) rămân autenticate prin
+    API key și nu sunt apelate din acest component de hartă.
+  - [x] Adaugă `app.UseCors("map-client");` în pipeline, imediat după `app.UseHttpsRedirection();`
+    și înainte de `app.UseRateLimiter();` (ordinea recomandată de ASP.NET Core: CORS înaintea
+    rate limiting/auth pentru ca preflight-urile `OPTIONS` să nu fie blocate de politicile de
+    autentificare/rate-limit).
+  - [x] Nu extinde politica la `AllowAnyOrigin`/`AllowCredentials` — nu e nevoie de credențiale
+    pentru citire anonimă, iar o listă explicită de origini e mai sigură.
 
   LOGGING REQUIREMENTS:
-  - [x] `ILogger<VectorTileEncoder>` injectat prin constructor.
-  - [x] DEBUG la intrare: `Z`, `X`, `Y`, `PointCount` (numărul de puncte primite).
-  - [x] INFO la finalizare reușită: `Z`, `X`, `Y`, `PointCount`, `ByteSize` (lungimea array-ului
-    rezultat), `ElapsedMs` (măsurat cu `Stopwatch`).
-  - [x] ERROR dacă encodarea aruncă excepție neașteptată, cu `Z`/`X`/`Y` în context, apoi re-throw.
-  - [x] Format mesaje consecvent cu restul proiectului (ex. `MongoMapPointRepository`):
-    `"Encode called. Z: {Z}, X: {X}, Y: {Y}, PointCount: {PointCount}"`.
+  - [x] Nicio cerință de logging suplimentară — este o modificare de configurare/pipeline fără
+    logică de business proprie.
 
-### Phase 2: Integrare serviciu + endpoint
+### Phase 2: Consumare MVT + stilizare în MapLibre
 
-- [x] **Task 4: Adaugă metoda de generare tile MVT în `IMapPointService`/`MapPointService`**
-  Fișiere: `src/TalentMap.Api/Services/IMapPointService.cs`,
-  `src/TalentMap.Api/Services/MapPointService.cs`
-  (depinde de Task 3)
+- [x] **Task 2: Adaugă sursa vector `mappoints`, un circle layer și un symbol layer stilizate
+  după `type`/`status`, în `map.ts`**
+  Fișiere: `src/talent-map-client/src/app/map/map.ts`
+  (depinde de Task 1 — fără CORS, cererile de tile eșuează silențios cu eroare de rețea)
 
-  Adaugă în interfață: `Task<byte[]> GetTileMvtAsync(int z, int x, int y);`
-
-  Implementare în `MapPointService`:
-  - [x] Injectează `IVectorTileEncoder` prin constructor (adaugă câmp `_vectorTileEncoder`).
-  - [x] Reutilizează exact fluxul din `GetByTileAsync`: `TileGeometry.ToPolygon(z, x, y)` (prinde
-    `ArgumentOutOfRangeException` și aruncă `MapPointValidationException`, identic cu
-    `GetByTileAsync`), apoi `_repository.FindWithinAsync(polygon)` pentru lista de `MapPoint`.
-  - [x] Apelează `_vectorTileEncoder.Encode(points, z, x, y)` și returnează bytes-ii.
-  - [x] Nu duplica validarea — extrage, dacă e util, un helper privat comun pentru
-    `TileGeometry.ToPolygon` cu try/catch, folosit de ambele metode (`GetByTileAsync` și
-    `GetTileMvtAsync`), pentru a evita codul duplicat.
-
-  > Notă implementare: extras helper-ul privat `ResolveTilePolygon(callerName, z, x, y)`, folosit
-  > acum de `GetByTileAsync` și `GetTileMvtAsync` — elimină duplicarea try/catch, mesajul de WARN
-  > include numele metodei apelante.
-
-  LOGGING REQUIREMENTS:
-  - [x] INFO la intrare: `"GetTileMvtAsync called. Z: {Z}, X: {X}, Y: {Y}"`.
-  - [x] WARN dacă `TileGeometry.ToPolygon` aruncă (coordonate tile invalide), identic ca stil cu
-    `GetByTileAsync`.
-  - [x] INFO la succes: `"GetTileMvtAsync succeeded. Z: {Z}, X: {X}, Y: {Y}, PointCount: {PointCount},
-    ByteSize: {ByteSize}"`.
-
-- [x] **Task 5: Înregistrează `IVectorTileEncoder` în DI**
-  Fișier: `src/TalentMap.Api/Program.cs`
-  (depinde de Task 3)
-  Adaugă `builder.Services.AddSingleton<IVectorTileEncoder, VectorTileEncoder>();` lângă
-  înregistrările existente (`IMoldovaBorderValidator`, `IMapPointRepository`) — serviciul e
-  stateless (nu ține stare între request-uri), deci singleton e consistent cu restul.
-  Nicio cerință de logging suplimentară (folosește deja `app.LogMongoRegistration()`-style logging
-  existent pentru pornire, dacă e cazul; altfel nu e necesar logging separat pentru o linie de DI).
-
-- [x] **Task 6: Adaugă controller-ul `MapTilesController` cu endpoint-ul `.pbf`**
-  Fișier nou: `src/TalentMap.Api/Controllers/MapTilesController.cs`
-  (depinde de Task 4, Task 5)
-
-  ```csharp
-  [ApiController]
-  [Route("api/map")]
-  public class MapTilesController : ControllerBase
-  {
-      private readonly ILogger<MapTilesController> _logger;
-      private readonly IMapPointService _mapPointService;
-
-      public MapTilesController(ILogger<MapTilesController> logger, IMapPointService mapPointService)
-      { ... }
-
-      [HttpGet("points/{z:int}/{x:int}/{y:int}.pbf")]
-      [AllowAnonymous]
-      [EnableRateLimiting("mappoints-read")]
-      public async Task<IActionResult> GetTile(int z, int x, int y)
-      {
-          try
-          {
-              var bytes = await _mapPointService.GetTileMvtAsync(z, x, y);
-              return File(bytes, "application/vnd.mapbox-vector-tile");
-          }
-          catch (MapPointValidationException ex)
-          {
-              return BadRequest(new { errors = ex.Errors });
-          }
-      }
-  }
-  ```
-  - [x] Content-Type răspuns: `application/vnd.mapbox-vector-tile`.
-  - [x] `[AllowAnonymous]` + `[EnableRateLimiting("mappoints-read")]` la nivel de acțiune, la fel ca
-    `GetByTile` din `MapPointsController` (controller-ul nou nu are `[Authorize]` la nivel de
-    clasă, deci nu e nevoie de override — dar adaugă explicit `[AllowAnonymous]` pentru claritate
-    și consecvență vizuală cu restul codului).
-  - [x] Controller-ul rămâne subțire: validare implicită prin route constraints (`:int`), apel unic
-    către `IMapPointService.GetTileMvtAsync`, formatare răspuns.
+  - [x] Adaugă un câmp nou `private readonly mapPointsApiBaseUrl = 'http://localhost:5205';`
+    lângă celelalte constante existente (`style`, `center`, etc.), cu un comentariu scurt care
+    explică hardcodarea (consistent cu restul componentului, care nu folosește încă
+    `environment.ts`).
+    **[REWORK 2026-09-10]** Valoarea inițială (`13466`) era portul mapat de `compose.yml` pentru
+    scenariul docker-compose (client nginx pe `13467` → api pe `13466`), nu portul real al API-ului
+    rulat local prin `dotnet run` (`5205`/`7004`, per `launchSettings.json`). Cum fluxul de dev
+    descris în Context (`ng serve` pe `4200`) rulează API-ul local, nu prin docker, s-a corectat la
+    `5205` ca să corespundă cu CORS-ul deja configurat în `appsettings.Development.json` (`4200`).
+    Constanta nu poate acoperi ambele scenarii simultan fără `environment.ts` (în afara scopului) —
+    scenariul docker-compose (`13466`/`13467`, auto-consistent între `compose.yml` și
+    `appsettings.json`) rămâne o limitare cunoscută dacă frontend-ul e build-uit și rulat prin
+    containerul nginx.
+  - [x] Creează o metodă privată nouă `addMapPointsLayer(): void` care, dacă `this.map` există:
+    - [x] Adaugă sursa: `this.map.addSource('mappoints', { type: 'vector', tiles: [
+      `${this.mapPointsApiBaseUrl}/api/map/points/{z}/{x}/{y}.pbf`], minzoom: this.minZoom,
+      maxzoom: this.maxZoom });`
+    - [x] Adaugă un circle layer `'mappoints-circle'`, `source: 'mappoints'`,
+      `'source-layer': 'mappoints'`, cu styling data-driven:
+      - [x] `circle-radius`: `['interpolate', ['linear'], ['zoom'], 6, 3, 14, 7, 18, 10]`
+      - [x] `circle-color`: `['match', ['get', 'status'], 'active', '#16a34a', 'inactive',
+        '#9ca3af', /* fallback pentru statusuri necunoscute */ '#f59e0b']`
+      - [x] `circle-stroke-width`: `2`
+      - [x] `circle-stroke-color`: `['match', ['get', 'type'], 'generic', '#ffffff', /* fallback
+        pentru tipuri necunoscute — folosește aceeași culoare albă până apar tipuri reale */
+        '#ffffff']` — expresia `match` e scrisă explicit pregătită pentru extindere (adăugare
+        de culori noi per tip), chiar dacă azi toate punctele au `type: "generic"`.
+    - [x] Adaugă un symbol layer `'mappoints-label'`, aceeași sursă/`source-layer`, vizibil doar
+      la zoom mai mare (`minzoom: 13`, pentru a evita aglomerarea vizuală la zoom redus):
+      - [x] `layout`: `'text-field': ['get', 'type']`, `'text-size': 12, 'text-offset': [0, 1.4],
+        'text-anchor': 'top'`
+      - [x] `paint`: `'text-color': '#111827', 'text-halo-color': '#ffffff', 'text-halo-width': 1.2`
+    - [x] Log `console.debug('[MapComponent] mappoints source + circle/symbol layers added', {
+      tilesUrl })` la final.
+  - [x] În `ngAfterViewInit`, în handler-ul `this.map.on('load', ...)`, înlănțuie apelul după ce
+    granița se încarcă: schimbă `void this.loadMoldovaBorder();` în
+    `void this.loadMoldovaBorder().then(() => this.addMapPointsLayer());` — garantează ordinea
+    de randare (puncte deasupra măștii/graniței) conform găsirii din Context.
+  - [x] Nu modifica `handleMapClick`/`showTemporaryMarker` — interacțiunea de plasare marker
+    temporar rămâne neschimbată, în afara scopului acestui task.
 
   LOGGING REQUIREMENTS:
-  - [x] INFO la intrare: `"GetTile action called. Route: GET api/map/points/{Z}/{X}/{Y}.pbf"`.
-  - [x] WARN la `MapPointValidationException` (coordonate tile invalide), cu mesajele de eroare din
-    excepție — identic stil cu celelalte acțiuni din `MapPointsController`.
+  - [x] `console.debug` la adăugarea sursei și fiecărui layer (poate fi un singur log combinat,
+    ca mai sus), consecvent cu stilul de logging existent în `map.ts`
+    (`console.debug('[MapComponent] ...')`).
+  - [x] `console.error('[MapComponent] failed to add mappoints layer', error)` dacă
+    `addSource`/`addLayer` aruncă excepție (ex. sursă/layer deja existent la un re-render) —
+    încadrează corpul metodei într-un `try/catch`, consecvent cu `addMoldovaMaskLayer`.

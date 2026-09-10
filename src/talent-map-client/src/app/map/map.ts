@@ -27,6 +27,11 @@ export class MapComponent implements AfterViewInit {
   // Margin (degrees) added around maxBounds to build the outside-mask polygon,
   // so the mask stays compact instead of covering the whole world (turf.mask default).
   private readonly maskBoundsMargin = 1;
+  // No environment.ts/fileReplacements setup exists yet in this project (angular.json has no
+  // configurations for it) — hardcoded here consistent with `style` above. Matches the API's
+  // local dev port from launchSettings.json (http profile), paired with the `ng serve` origin
+  // (4200) already whitelisted in appsettings.Development.json's Cors:AllowedOrigins.
+  private readonly mapPointsApiBaseUrl = 'http://localhost:5205';
 
   private map: maplibregl.Map | undefined;
   private moldovaBorder: Feature<Polygon | MultiPolygon> | undefined;
@@ -47,7 +52,7 @@ export class MapComponent implements AfterViewInit {
 
     this.map.on('load', () => {
       console.debug('[MapComponent] map load event fired');
-      void this.loadMoldovaBorder();
+      void this.loadMoldovaBorder().then(() => this.addMapPointsLayer());
     });
     this.map.on('error', (event: ErrorEvent) => console.error('[MapComponent] map error event', event));
     this.map.on('click', (event: maplibregl.MapMouseEvent) => this.handleMapClick(event));
@@ -158,6 +163,75 @@ export class MapComponent implements AfterViewInit {
       console.debug('[MapComponent] moldova-mask-fill layer added');
     } catch (error) {
       console.error('[MapComponent] failed to compute/add Moldova mask layer', error);
+    }
+  }
+
+  private addMapPointsLayer(): void {
+    if (!this.map) {
+      return;
+    }
+
+    const tilesUrl = `${this.mapPointsApiBaseUrl}/api/map/points/{z}/{x}/{y}.pbf`;
+    console.debug('[MapComponent] adding mappoints vector source + layers', { tilesUrl });
+    try {
+      this.map.addSource('mappoints', {
+        type: 'vector',
+        tiles: [tilesUrl],
+        minzoom: this.minZoom,
+        maxzoom: this.maxZoom
+      });
+
+      this.map.addLayer({
+        id: 'mappoints-circle',
+        type: 'circle',
+        source: 'mappoints',
+        'source-layer': 'mappoints',
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 3, 14, 7, 18, 10],
+          'circle-color': [
+            'match',
+            ['get', 'status'],
+            'active',
+            '#16a34a',
+            'inactive',
+            '#9ca3af',
+            // fallback for unknown statuses
+            '#f59e0b'
+          ],
+          'circle-stroke-width': 2,
+          'circle-stroke-color': [
+            'match',
+            ['get', 'type'],
+            'generic',
+            '#ffffff',
+            // fallback for unknown types — same white until real types are introduced
+            '#ffffff'
+          ]
+        }
+      });
+
+      this.map.addLayer({
+        id: 'mappoints-label',
+        type: 'symbol',
+        source: 'mappoints',
+        'source-layer': 'mappoints',
+        minzoom: 13,
+        layout: {
+          'text-field': ['get', 'type'],
+          'text-size': 12,
+          'text-offset': [0, 1.4],
+          'text-anchor': 'top'
+        },
+        paint: {
+          'text-color': '#111827',
+          'text-halo-color': '#ffffff',
+          'text-halo-width': 1.2
+        }
+      });
+
+      console.debug('[MapComponent] mappoints source + circle/symbol layers added', { tilesUrl });
+    } catch (error) {
+      console.error('[MapComponent] failed to add mappoints layer', error);
     }
   }
 }
