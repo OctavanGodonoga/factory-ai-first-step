@@ -7,8 +7,6 @@ namespace TalentMap.Api.Extensions;
 
 public static class MongoStartupExtensions
 {
-    private const string MapPointsCollectionName = "mapPoints";
-
     public static void LogMongoRegistration(this WebApplication app)
     {
         var logger = app.Services.GetRequiredService<ILogger<Program>>();
@@ -63,14 +61,14 @@ public static class MongoStartupExtensions
 
         try
         {
-            var collection = database.GetCollection<MapPoint>(MapPointsCollectionName);
+            var collection = database.GetCollection<MapPoint>(MapPoint.CollectionName);
             var indexKeys = Builders<MapPoint>.IndexKeys.Geo2DSphere(p => p.Location);
             var indexName = await collection.Indexes.CreateOneAsync(new CreateIndexModel<MapPoint>(indexKeys));
 
             stopwatch.Stop();
             logger.LogInformation(
                 "2dsphere index ensured on {CollectionName}.location in {ElapsedMs} ms. Index name: {IndexName}",
-                MapPointsCollectionName,
+                MapPoint.CollectionName,
                 stopwatch.ElapsedMilliseconds,
                 indexName);
         }
@@ -80,7 +78,7 @@ public static class MongoStartupExtensions
             logger.LogWarning(
                 ex,
                 "Failed to ensure 2dsphere index on {CollectionName}.location after {ElapsedMs} ms. ExceptionType: {ExceptionType}",
-                MapPointsCollectionName,
+                MapPoint.CollectionName,
                 stopwatch.ElapsedMilliseconds,
                 ex.GetType().Name);
         }

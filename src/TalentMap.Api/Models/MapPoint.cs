@@ -6,6 +6,8 @@ namespace TalentMap.Api.Models;
 
 public class MapPoint
 {
+    public const string CollectionName = "mapPoints";
+
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
     public string? Id { get; set; }

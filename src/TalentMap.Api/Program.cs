@@ -1,4 +1,5 @@
 using TalentMap.Api.Extensions;
+using TalentMap.Api.Repositories;
 using TalentMap.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -11,6 +12,8 @@ builder.Services.AddOpenApi();
 
 builder.Services.AddMongoDb(builder.Configuration);
 builder.Services.AddSingleton<IMoldovaBorderValidator, MoldovaBorderValidator>();
+builder.Services.AddSingleton<IMapPointRepository, MongoMapPointRepository>();
+builder.Services.AddScoped<IMapPointService, MapPointService>();
 
 var app = builder.Build();
 
