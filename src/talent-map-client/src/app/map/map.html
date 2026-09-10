@@ -1,1 +1,10 @@
 <div #mapContainer class="map-container"></div>
+
+@if (selectedPoint(); as point) {
+  <div class="point-details-panel">
+    <h3>{{ point.name }}</h3>
+    <p>{{ point.description ?? 'Fără descriere' }}</p>
+    <p>Longitudine: {{ point.longitude }}</p>
+    <p>Latitudine: {{ point.latitude }}</p>
+  </div>
+}

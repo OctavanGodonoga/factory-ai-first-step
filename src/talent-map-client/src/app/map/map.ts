@@ -1,8 +1,11 @@
-import { AfterViewInit, Component, DestroyRef, ElementRef, inject, viewChild } from '@angular/core';
+import { AfterViewInit, Component, DestroyRef, ElementRef, inject, signal, viewChild } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import * as maplibregl from 'maplibre-gl';
 import type { ErrorEvent } from 'maplibre-gl';
 import { bboxPolygon, booleanPointInPolygon, mask, point } from '@turf/turf';
 import type { Feature, MultiPolygon, Polygon } from 'geojson';
+import { MapPointsService } from './map-points.service';
+import type { MapPointDetails } from './map-points.service';
 
 @Component({
   selector: 'app-map',
@@ -13,6 +16,9 @@ import type { Feature, MultiPolygon, Polygon } from 'geojson';
 export class MapComponent implements AfterViewInit {
   private readonly mapContainer = viewChild.required<ElementRef<HTMLDivElement>>('mapContainer');
   private readonly destroyRef = inject(DestroyRef);
+  private readonly mapPointsService = inject(MapPointsService);
+
+  readonly selectedPoint = signal<MapPointDetails | null>(null);
 
   // OpenFreeMap "liberty" style: free, no API key, explicitly intended for production use.
   // https://openfreemap.org
@@ -36,6 +42,7 @@ export class MapComponent implements AfterViewInit {
   private map: maplibregl.Map | undefined;
   private moldovaBorder: Feature<Polygon | MultiPolygon> | undefined;
   private temporaryMarker: maplibregl.Marker | undefined;
+  private selectedMarker: maplibregl.Marker | undefined;
 
   ngAfterViewInit(): void {
     console.debug('[MapComponent] ngAfterViewInit: initializing MapLibre map');
@@ -63,10 +70,28 @@ export class MapComponent implements AfterViewInit {
       this.map = undefined;
       this.temporaryMarker?.remove();
       this.temporaryMarker = undefined;
+      this.selectedMarker?.remove();
+      this.selectedMarker = undefined;
     });
   }
 
   private handleMapClick(event: maplibregl.MapMouseEvent): void {
+    const hits = this.map?.queryRenderedFeatures(event.point, { layers: ['mappoints-circle'] }) ?? [];
+
+    if (hits.length > 0) {
+      const feature = hits[0];
+      const id = String(feature.properties?.['id']);
+      console.debug('[MapComponent] existing point clicked', { id });
+      this.selectExistingPoint(id, feature.geometry);
+      return;
+    }
+
+    if (this.selectedPoint() !== null) {
+      this.selectedMarker?.remove();
+      this.selectedMarker = undefined;
+      this.selectedPoint.set(null);
+    }
+
     const { lng, lat } = event.lngLat;
 
     if (!this.moldovaBorder) {
@@ -83,6 +108,31 @@ export class MapComponent implements AfterViewInit {
     }
 
     this.showTemporaryMarker(event.lngLat);
+  }
+
+  private selectExistingPoint(id: string, geometry: GeoJSON.Geometry): void {
+    if (!this.map) {
+      return;
+    }
+
+    const lngLat = (geometry as GeoJSON.Point).coordinates as [number, number];
+
+    this.selectedMarker?.remove();
+    this.selectedMarker = new maplibregl.Marker({ color: '#2563eb' }).setLngLat(lngLat).addTo(this.map);
+
+    this.mapPointsService
+      .getById(id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (details) => {
+          console.debug('[MapComponent] point details loaded', { id, details });
+          this.selectedPoint.set(details);
+        },
+        error: (error) => {
+          console.error('[MapComponent] failed to load point details', { id, error });
+          this.selectedPoint.set(null);
+        }
+      });
   }
 
   private showTemporaryMarker(lngLat: maplibregl.LngLatLike): void {

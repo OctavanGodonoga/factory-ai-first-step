@@ -61,6 +61,22 @@ public class MapPointsController : ControllerBase
         }
     }
 
+    [HttpGet("{id}")]
+    [AllowAnonymous]
+    [EnableRateLimiting("mappoints-read")]
+    public async Task<IActionResult> GetById(string id)
+    {
+        _logger.LogInformation("GetById action called. Route: GET api/mappoints/{Id}", id);
+
+        var result = await _mapPointService.GetByIdAsync(id);
+        if (result is null)
+        {
+            return NotFound();
+        }
+
+        return Ok(result);
+    }
+
     [HttpGet("tile/{z:int}/{x:int}/{y:int}")]
     [AllowAnonymous]
     [EnableRateLimiting("mappoints-read")]

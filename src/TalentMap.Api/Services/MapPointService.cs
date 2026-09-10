@@ -94,6 +94,26 @@ public class MapPointService : IMapPointService
         return point;
     }
 
+    public async Task<MapPointDto?> GetByIdAsync(string id)
+    {
+        if (!ObjectId.TryParse(id, out _))
+        {
+            _logger.LogWarning("GetByIdAsync received an invalid ObjectId. Id: {Id}", id);
+            return null;
+        }
+
+        var point = await _repository.FindByIdAsync(id);
+        if (point is null)
+        {
+            _logger.LogInformation("GetByIdAsync: point not found. Id: {Id}", id);
+            return null;
+        }
+
+        _logger.LogDebug("GetByIdAsync: point {Id} found", id);
+
+        return ToDto(point);
+    }
+
     public async Task<IReadOnlyList<MapPointDto>> GetByTileAsync(int z, int x, int y)
     {
         _logger.LogInformation("GetByTileAsync called. Z: {Z}, X: {X}, Y: {Y}", z, x, y);
