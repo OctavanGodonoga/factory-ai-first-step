@@ -80,6 +80,20 @@ export class MapComponent implements AfterViewInit {
 
     if (hits.length > 0) {
       const feature = hits[0];
+
+      if (feature.properties?.['cluster'] === true) {
+        const targetZoom = Math.min(this.map!.getZoom() + 3, this.maxZoom);
+        console.debug('[MapComponent] cluster clicked, zooming in', {
+          count: feature.properties?.['count'],
+          targetZoom
+        });
+        this.map!.easeTo({
+          center: (feature.geometry as GeoJSON.Point).coordinates as [number, number],
+          zoom: targetZoom
+        });
+        return;
+      }
+
       const id = String(feature.properties?.['id']);
       console.debug('[MapComponent] existing point clicked', { id });
       this.selectExistingPoint(id, feature.geometry);
@@ -239,16 +253,26 @@ export class MapComponent implements AfterViewInit {
         source: 'mappoints',
         'source-layer': 'mappoints',
         paint: {
-          'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 3, 14, 7, 18, 10],
+          'circle-radius': [
+            'case',
+            ['==', ['get', 'cluster'], true],
+            ['interpolate', ['linear'], ['zoom'], 6, 12, 12, 20],
+            ['interpolate', ['linear'], ['zoom'], 6, 3, 14, 7, 18, 10]
+          ],
           'circle-color': [
-            'match',
-            ['get', 'status'],
-            'active',
-            '#16a34a',
-            'inactive',
-            '#9ca3af',
-            // fallback for unknown statuses
-            '#f59e0b'
+            'case',
+            ['==', ['get', 'cluster'], true],
+            '#7c3aed',
+            [
+              'match',
+              ['get', 'status'],
+              'active',
+              '#16a34a',
+              'inactive',
+              '#9ca3af',
+              // fallback for unknown statuses
+              '#f59e0b'
+            ]
           ],
           'circle-stroke-width': 2,
           'circle-stroke-color': [
@@ -259,6 +283,23 @@ export class MapComponent implements AfterViewInit {
             // fallback for unknown types — same white until real types are introduced
             '#ffffff'
           ]
+        }
+      });
+
+      this.map.addLayer({
+        id: 'mappoints-cluster-count',
+        type: 'symbol',
+        source: 'mappoints',
+        'source-layer': 'mappoints',
+        filter: ['==', ['get', 'cluster'], true],
+        layout: {
+          'text-field': ['to-string', ['get', 'count']],
+          'text-size': 12
+        },
+        paint: {
+          'text-color': '#ffffff',
+          'text-halo-color': '#7c3aed',
+          'text-halo-width': 1.2
         }
       });
 
