@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using TalentMap.Api.Models;
 using TalentMap.Api.Services;
 
@@ -6,6 +8,8 @@ namespace TalentMap.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
+[EnableRateLimiting("mappoints-write")]
 public class MapPointsController : ControllerBase
 {
     private readonly ILogger<MapPointsController> _logger;

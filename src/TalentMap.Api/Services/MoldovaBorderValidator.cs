@@ -55,6 +55,13 @@ public class MoldovaBorderValidator : IMoldovaBorderValidator
             var (xi, yi) = _borderRing[i];
             var (xj, yj) = _borderRing[j];
 
+            if (yi == yj)
+            {
+                // Horizontal edge: cannot straddle `latitude` on both differing sides, and would
+                // divide by zero below, so it never contributes a crossing.
+                continue;
+            }
+
             var intersects = ((yi > latitude) != (yj > latitude)) &&
                 (longitude < ((xj - xi) * (latitude - yi) / (yj - yi)) + xi);
 

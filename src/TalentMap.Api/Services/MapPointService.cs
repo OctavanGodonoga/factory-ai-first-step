@@ -7,6 +7,9 @@ namespace TalentMap.Api.Services;
 
 public class MapPointService : IMapPointService
 {
+    private const int MaxNameLength = 200;
+    private const int MaxDescriptionLength = 2000;
+
     private readonly ILogger<MapPointService> _logger;
     private readonly IMapPointRepository _repository;
     private readonly IMoldovaBorderValidator _borderValidator;
@@ -95,6 +98,15 @@ public class MapPointService : IMapPointService
         if (string.IsNullOrWhiteSpace(request.Name))
         {
             errors.Add("Numele este obligatoriu.");
+        }
+        else if (request.Name.Length > MaxNameLength)
+        {
+            errors.Add($"Numele nu poate depăși {MaxNameLength} de caractere.");
+        }
+
+        if (request.Description is { Length: > MaxDescriptionLength })
+        {
+            errors.Add($"Descrierea nu poate depăși {MaxDescriptionLength} de caractere.");
         }
 
         if (request.Longitude is < -180 or > 180)
