@@ -29,6 +29,8 @@ public class MapTilesController : ControllerBase
         try
         {
             var bytes = await _mapPointService.GetTileMvtAsync(z, x, y);
+            // 30s max-age must stay in sync with MapPointService.TileCacheTtl (the server-side cache TTL).
+            Response.Headers.CacheControl = "public, max-age=30";
             return File(bytes, "application/vnd.mapbox-vector-tile");
         }
         catch (MapPointValidationException ex)

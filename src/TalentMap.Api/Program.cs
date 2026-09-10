@@ -49,6 +49,7 @@ builder.Services.AddRateLimiter(options =>
         }));
 });
 
+builder.Services.AddMemoryCache();
 builder.Services.AddMongoDb(builder.Configuration);
 builder.Services.AddSingleton<IMoldovaBorderValidator, MoldovaBorderValidator>();
 builder.Services.AddSingleton<IMapPointRepository, MongoMapPointRepository>();

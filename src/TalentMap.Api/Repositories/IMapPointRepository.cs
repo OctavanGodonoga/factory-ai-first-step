@@ -12,4 +12,9 @@ public interface IMapPointRepository
     Task<bool> ReplaceAsync(string id, MapPoint point);
 
     Task<IReadOnlyList<MapPoint>> FindWithinAsync(GeoJsonPolygon<GeoJson2DGeographicCoordinates> polygon);
+
+    Task<IReadOnlyList<MapPointCluster>> FindClusteredAsync(
+        GeoJsonPolygon<GeoJson2DGeographicCoordinates> polygon,
+        (double MinLon, double MinLat, double MaxLon, double MaxLat) bounds,
+        int gridSize);
 }

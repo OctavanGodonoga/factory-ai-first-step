@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Caching.Memory;
 using MongoDB.Bson;
 using MongoDB.Driver.GeoJsonObjectModel;
 using TalentMap.Api.Models;
@@ -9,22 +10,30 @@ public class MapPointService : IMapPointService
 {
     private const int MaxNameLength = 200;
     private const int MaxDescriptionLength = 2000;
+    private const int ClusterMaxZoom = 13;
+    private const int ClusterGridSize = 16;
+
+    // Keep in sync with the Cache-Control max-age set in MapTilesController.GetTile.
+    private static readonly TimeSpan TileCacheTtl = TimeSpan.FromSeconds(30);
 
     private readonly ILogger<MapPointService> _logger;
     private readonly IMapPointRepository _repository;
     private readonly IMoldovaBorderValidator _borderValidator;
     private readonly IVectorTileEncoder _vectorTileEncoder;
+    private readonly IMemoryCache _cache;
 
     public MapPointService(
         ILogger<MapPointService> logger,
         IMapPointRepository repository,
         IMoldovaBorderValidator borderValidator,
-        IVectorTileEncoder vectorTileEncoder)
+        IVectorTileEncoder vectorTileEncoder,
+        IMemoryCache cache)
     {
         _logger = logger;
         _repository = repository;
         _borderValidator = borderValidator;
         _vectorTileEncoder = vectorTileEncoder;
+        _cache = cache;
     }
 
     public async Task<MapPoint> CreateAsync(MapPointRequest request)
@@ -137,18 +146,48 @@ public class MapPointService : IMapPointService
     {
         _logger.LogInformation("GetTileMvtAsync called. Z: {Z}, X: {X}, Y: {Y}", z, x, y);
 
+        var cacheKey = $"tile:{z}:{x}:{y}";
+        if (_cache.TryGetValue(cacheKey, out byte[]? cached) && cached is not null)
+        {
+            _logger.LogDebug("GetTileMvtAsync: cache hit. Z: {Z}, X: {X}, Y: {Y}", z, x, y);
+            return cached;
+        }
+
+        _logger.LogDebug("GetTileMvtAsync: cache miss. Z: {Z}, X: {X}, Y: {Y}", z, x, y);
+
         var polygon = ResolveTilePolygon(nameof(GetTileMvtAsync), z, x, y);
 
-        var points = await _repository.FindWithinAsync(polygon);
-        var bytes = _vectorTileEncoder.Encode(points, z, x, y);
+        byte[] bytes;
+        int resultCount;
+
+        if (z < ClusterMaxZoom)
+        {
+            _logger.LogDebug(
+                "GetTileMvtAsync: using cluster path. Z: {Z}, ClusterMaxZoom: {ClusterMaxZoom}",
+                z,
+                ClusterMaxZoom);
+
+            var bounds = TileGeometry.ToBoundingBox(z, x, y);
+            var clusters = await _repository.FindClusteredAsync(polygon, bounds, ClusterGridSize);
+            bytes = _vectorTileEncoder.EncodeClusters(clusters, z, x, y);
+            resultCount = clusters.Count;
+        }
+        else
+        {
+            var points = await _repository.FindWithinAsync(polygon);
+            bytes = _vectorTileEncoder.Encode(points, z, x, y);
+            resultCount = points.Count;
+        }
 
         _logger.LogInformation(
             "GetTileMvtAsync succeeded. Z: {Z}, X: {X}, Y: {Y}, PointCount: {PointCount}, ByteSize: {ByteSize}",
             z,
             x,
             y,
-            points.Count,
+            resultCount,
             bytes.Length);
+
+        _cache.Set(cacheKey, bytes, TileCacheTtl);
 
         return bytes;
     }

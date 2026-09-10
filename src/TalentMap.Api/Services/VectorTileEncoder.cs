@@ -77,4 +77,59 @@ public class VectorTileEncoder : IVectorTileEncoder
             throw;
         }
     }
+
+    public byte[] EncodeClusters(IReadOnlyList<MapPointCluster> clusters, int z, int x, int y)
+    {
+        _logger.LogDebug(
+            "EncodeClusters called. Z: {Z}, X: {X}, Y: {Y}, ClusterCount: {ClusterCount}",
+            z,
+            x,
+            y,
+            clusters.Count);
+
+        var stopwatch = Stopwatch.StartNew();
+
+        try
+        {
+            var tile = new TileCoordinate(x, y, z);
+            var vectorTile = new VectorTile { TileId = tile.Id };
+            var layer = new Layer { Name = LayerName };
+
+            foreach (var cluster in clusters)
+            {
+                var geometry = GeometryFactory.CreatePoint(new Coordinate(cluster.Longitude, cluster.Latitude));
+
+                var attributes = new AttributesTable
+                {
+                    { "cluster", true },
+                    { "count", cluster.Count },
+                };
+
+                layer.Features.Add(new Feature(geometry, attributes));
+            }
+
+            vectorTile.Layers.Add(layer);
+
+            using var stream = new MemoryStream();
+            vectorTile.Write(stream, MapboxTileWriter.DefaultMinLinealExtent, MapboxTileWriter.DefaultMinPolygonalExtent);
+            var bytes = stream.ToArray();
+
+            stopwatch.Stop();
+            _logger.LogInformation(
+                "EncodeClusters succeeded. Z: {Z}, X: {X}, Y: {Y}, ClusterCount: {ClusterCount}, ByteSize: {ByteSize}, ElapsedMs: {ElapsedMs}",
+                z,
+                x,
+                y,
+                clusters.Count,
+                bytes.Length,
+                stopwatch.ElapsedMilliseconds);
+
+            return bytes;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "EncodeClusters failed. Z: {Z}, X: {X}, Y: {Y}", z, x, y);
+            throw;
+        }
+    }
 }
