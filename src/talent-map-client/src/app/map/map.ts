@@ -130,6 +130,8 @@ export class MapComponent implements AfterViewInit {
         },
         error: (error) => {
           console.error('[MapComponent] failed to load point details', { id, error });
+          this.selectedMarker?.remove();
+          this.selectedMarker = undefined;
           this.selectedPoint.set(null);
         }
       });
