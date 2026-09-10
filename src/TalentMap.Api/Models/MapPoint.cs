@@ -21,6 +21,12 @@ public class MapPoint
     [BsonElement("location")]
     public GeoJsonPoint<GeoJson2DGeographicCoordinates> Location { get; set; } = null!;
 
+    [BsonElement("type")]
+    public string Type { get; set; } = "generic";
+
+    [BsonElement("status")]
+    public string Status { get; set; } = "active";
+
     [BsonElement("createdAt")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
