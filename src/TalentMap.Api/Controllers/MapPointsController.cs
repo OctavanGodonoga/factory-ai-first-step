@@ -60,4 +60,23 @@ public class MapPointsController : ControllerBase
             return BadRequest(new { errors = ex.Errors });
         }
     }
+
+    [HttpGet("tile/{z:int}/{x:int}/{y:int}")]
+    [AllowAnonymous]
+    [EnableRateLimiting("mappoints-read")]
+    public async Task<IActionResult> GetByTile(int z, int x, int y)
+    {
+        _logger.LogInformation("GetByTile action called. Route: GET api/mappoints/tile/{Z}/{X}/{Y}", z, x, y);
+
+        try
+        {
+            var result = await _mapPointService.GetByTileAsync(z, x, y);
+            return Ok(result);
+        }
+        catch (MapPointValidationException ex)
+        {
+            _logger.LogWarning("GetByTile validation failed. Errors: {Errors}", string.Join("; ", ex.Errors));
+            return BadRequest(new { errors = ex.Errors });
+        }
+    }
 }

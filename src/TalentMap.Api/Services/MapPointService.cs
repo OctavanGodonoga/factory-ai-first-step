@@ -91,6 +91,51 @@ public class MapPointService : IMapPointService
         return point;
     }
 
+    public async Task<IReadOnlyList<MapPointDto>> GetByTileAsync(int z, int x, int y)
+    {
+        _logger.LogInformation("GetByTileAsync called. Z: {Z}, X: {X}, Y: {Y}", z, x, y);
+
+        GeoJsonPolygon<GeoJson2DGeographicCoordinates> polygon;
+        try
+        {
+            polygon = TileGeometry.ToPolygon(z, x, y);
+        }
+        catch (ArgumentOutOfRangeException ex)
+        {
+            _logger.LogWarning(
+                "GetByTileAsync received invalid tile coordinates. Z: {Z}, X: {X}, Y: {Y}, Message: {Message}",
+                z,
+                x,
+                y,
+                ex.Message);
+            throw new MapPointValidationException(new List<string> { ex.Message });
+        }
+
+        var points = await _repository.FindWithinAsync(polygon);
+        var result = points.Select(ToDto).ToList();
+
+        _logger.LogInformation(
+            "GetByTileAsync succeeded. Z: {Z}, X: {X}, Y: {Y}, PointCount: {PointCount}",
+            z,
+            x,
+            y,
+            result.Count);
+
+        return result;
+    }
+
+    private static MapPointDto ToDto(MapPoint point)
+    {
+        return new MapPointDto
+        {
+            Id = point.Id ?? string.Empty,
+            Name = point.Name,
+            Description = point.Description,
+            Longitude = point.Location.Coordinates.Longitude,
+            Latitude = point.Location.Coordinates.Latitude,
+        };
+    }
+
     private void ValidateRequest(MapPointRequest request)
     {
         var errors = new List<string>();
