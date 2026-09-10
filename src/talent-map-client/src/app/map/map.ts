@@ -1,7 +1,7 @@
 import { AfterViewInit, Component, DestroyRef, ElementRef, inject, viewChild } from '@angular/core';
 import * as maplibregl from 'maplibre-gl';
 import type { ErrorEvent } from 'maplibre-gl';
-import { bboxPolygon, mask } from '@turf/turf';
+import { bboxPolygon, booleanPointInPolygon, mask, point } from '@turf/turf';
 import type { Feature, MultiPolygon, Polygon } from 'geojson';
 
 @Component({
@@ -30,6 +30,7 @@ export class MapComponent implements AfterViewInit {
 
   private map: maplibregl.Map | undefined;
   private moldovaBorder: Feature<Polygon | MultiPolygon> | undefined;
+  private temporaryMarker: maplibregl.Marker | undefined;
 
   ngAfterViewInit(): void {
     console.debug('[MapComponent] ngAfterViewInit: initializing MapLibre map');
@@ -49,12 +50,44 @@ export class MapComponent implements AfterViewInit {
       void this.loadMoldovaBorder();
     });
     this.map.on('error', (event: ErrorEvent) => console.error('[MapComponent] map error event', event));
+    this.map.on('click', (event: maplibregl.MapMouseEvent) => this.handleMapClick(event));
 
     this.destroyRef.onDestroy(() => {
       console.debug('[MapComponent] onDestroy: removing MapLibre map instance');
       this.map?.remove();
       this.map = undefined;
+      this.temporaryMarker?.remove();
+      this.temporaryMarker = undefined;
     });
+  }
+
+  private handleMapClick(event: maplibregl.MapMouseEvent): void {
+    const { lng, lat } = event.lngLat;
+
+    if (!this.moldovaBorder) {
+      console.warn('[MapComponent] click ignored: Moldova border not loaded yet');
+      return;
+    }
+
+    const clickPoint = point([lng, lat]);
+    const insideMoldova = booleanPointInPolygon(clickPoint, this.moldovaBorder);
+    console.debug('[MapComponent] click point-in-polygon check', { lng, lat, insideMoldova });
+
+    if (!insideMoldova) {
+      return;
+    }
+
+    this.showTemporaryMarker(event.lngLat);
+  }
+
+  private showTemporaryMarker(lngLat: maplibregl.LngLatLike): void {
+    if (!this.map) {
+      return;
+    }
+
+    this.temporaryMarker?.remove();
+    this.temporaryMarker = new maplibregl.Marker({ color: '#ffcc00' }).setLngLat(lngLat).addTo(this.map);
+    console.debug('[MapComponent] temporary marker placed', { lngLat });
   }
 
   private async loadMoldovaBorder(): Promise<void> {
