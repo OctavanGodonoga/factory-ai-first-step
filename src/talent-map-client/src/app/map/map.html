@@ -8,3 +8,11 @@
     <p>Latitudine: {{ point.latitude }}</p>
   </div>
 }
+
+@if (temporaryPoint(); as tempPoint) {
+  <div class="point-details-panel">
+    <h3>Punct plasat</h3>
+    <p>Longitudine: {{ tempPoint.longitude }}</p>
+    <p>Latitudine: {{ tempPoint.latitude }}</p>
+  </div>
+}

@@ -2,7 +2,7 @@ import { Routes } from '@angular/router';
 
 export const routes: Routes = [
   {
-    path: 'map',
+    path: '',
     loadComponent: () => import('./map/map').then((m) => m.MapComponent)
   }
 ];

@@ -19,6 +19,7 @@ export class MapComponent implements AfterViewInit {
   private readonly mapPointsService = inject(MapPointsService);
 
   readonly selectedPoint = signal<MapPointDetails | null>(null);
+  readonly temporaryPoint = signal<{ longitude: number; latitude: number } | null>(null);
 
   // OpenFreeMap "liberty" style: free, no API key, explicitly intended for production use.
   // https://openfreemap.org
@@ -57,6 +58,9 @@ export class MapComponent implements AfterViewInit {
       maxBounds: this.maxBounds
     });
 
+    this.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+    console.debug('[MapComponent] NavigationControl added');
+
     this.map.on('load', () => {
       console.debug('[MapComponent] map load event fired');
       void this.loadMoldovaBorder().then(() => this.addMapPointsLayer());
@@ -72,6 +76,7 @@ export class MapComponent implements AfterViewInit {
       this.temporaryMarker = undefined;
       this.selectedMarker?.remove();
       this.selectedMarker = undefined;
+      this.temporaryPoint.set(null);
     });
   }
 
@@ -80,6 +85,10 @@ export class MapComponent implements AfterViewInit {
 
     if (hits.length > 0) {
       const feature = hits[0];
+
+      this.temporaryMarker?.remove();
+      this.temporaryMarker = undefined;
+      this.temporaryPoint.set(null);
 
       if (feature.properties?.['cluster'] === true) {
         const targetZoom = Math.min(this.map!.getZoom() + 3, this.maxZoom);
@@ -158,7 +167,10 @@ export class MapComponent implements AfterViewInit {
 
     this.temporaryMarker?.remove();
     this.temporaryMarker = new maplibregl.Marker({ color: '#ffcc00' }).setLngLat(lngLat).addTo(this.map);
-    console.debug('[MapComponent] temporary marker placed', { lngLat });
+
+    const converted = maplibregl.LngLat.convert(lngLat);
+    this.temporaryPoint.set({ longitude: converted.lng, latitude: converted.lat });
+    console.debug('[MapComponent] temporary marker placed', { lngLat, coordinates: converted });
   }
 
   private async loadMoldovaBorder(): Promise<void> {
